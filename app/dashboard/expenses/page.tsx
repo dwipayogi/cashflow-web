@@ -4,12 +4,13 @@ import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { PieChart, Pie, Cell, ResponsiveContainer, Legend } from "recharts"
+import { PieChart, Pie, Cell, ResponsiveContainer, Legend, BarChart, Bar, XAxis, YAxis, Tooltip } from "recharts"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { format } from "date-fns"
-import { Plus, Edit2, Trash2 } from "lucide-react"
+import { format, subDays, subMonths, subYears, isWithinInterval, startOfWeek, startOfMonth, startOfYear } from "date-fns"
+import { Plus, Edit2, Trash2, PieChart as PieChartIcon, BarChart as BarChartIcon } from "lucide-react"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 const COLORS = ['hsl(var(--chart-1))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))']
 
@@ -21,23 +22,22 @@ const initialCategories = [
 ]
 
 const expenses = [
-  { id: 1, name: "Groceries", amount: 450, category: "Food", date: "2024-03-15T14:30:00" },
-  { id: 2, name: "Electricity", amount: 120, category: "Utilities", date: "2024-03-14T09:15:00" },
-  { id: 3, name: "Netflix", amount: 15, category: "Entertainment", date: "2024-03-13T16:45:00" },
-  { id: 4, name: "Gas", amount: 45, category: "Transportation", date: "2024-03-12T11:20:00" },
-]
-
-const pieData = [
-  { name: 'Food', value: 450 },
-  { name: 'Utilities', value: 120 },
-  { name: 'Entertainment', value: 15 },
-  { name: 'Transportation', value: 45 },
+  { id: 1, name: "Groceries", amount: 120.50, category: "Food", date: "2024-03-20T14:30:00" },
+  { id: 2, name: "Electricity", amount: 85.30, category: "Utilities", date: "2024-03-19T09:15:00" },
+  { id: 3, name: "Netflix", amount: 15.99, category: "Entertainment", date: "2024-03-18T16:45:00" },
+  { id: 4, name: "Gas", amount: 45.00, category: "Transportation", date: "2024-03-17T11:20:00" },
+  { id: 5, name: "Restaurant", amount: 65.00, category: "Food", date: "2024-03-16T19:30:00" },
+  { id: 6, name: "Water Bill", amount: 35.00, category: "Utilities", date: "2024-03-15T10:00:00" },
+  { id: 7, name: "Movie Tickets", amount: 30.00, category: "Entertainment", date: "2024-03-14T20:15:00" },
+  { id: 8, name: "Bus Pass", amount: 25.00, category: "Transportation", date: "2024-03-13T08:45:00" },
 ]
 
 export default function ExpensesPage() {
   const [search, setSearch] = useState("")
   const [category, setCategory] = useState("all")
   const [categories, setCategories] = useState(initialCategories)
+  const [timeFilter, setTimeFilter] = useState("month")
+  const [viewMode, setViewMode] = useState("category")
   const [newExpense, setNewExpense] = useState({
     name: "",
     amount: "",
@@ -47,11 +47,57 @@ export default function ExpensesPage() {
   const [newCategory, setNewCategory] = useState({ name: "", color: COLORS[0] })
   const [editingCategory, setEditingCategory] = useState<{ id: number, name: string, color: string } | null>(null)
 
-  const filteredExpenses = expenses.filter(expense => {
+  const getTimeFilteredExpenses = () => {
+    const now = new Date()
+    let startDate: Date
+
+    switch (timeFilter) {
+      case "week":
+        startDate = startOfWeek(now)
+        break
+      case "month":
+        startDate = startOfMonth(now)
+        break
+      case "year":
+        startDate = startOfYear(now)
+        break
+      default:
+        startDate = startOfMonth(now)
+    }
+
+    return expenses.filter(expense => {
+      const expenseDate = new Date(expense.date)
+      return isWithinInterval(expenseDate, { start: startDate, end: now })
+    })
+  }
+
+  const filteredExpenses = getTimeFilteredExpenses().filter(expense => {
     const matchesSearch = expense.name.toLowerCase().includes(search.toLowerCase())
     const matchesCategory = category === "all" || expense.category === category
     return matchesSearch && matchesCategory
   })
+
+  const getCategoryData = () => {
+    const categoryTotals = filteredExpenses.reduce((acc, expense) => {
+      acc[expense.category] = (acc[expense.category] || 0) + expense.amount
+      return acc
+    }, {} as Record<string, number>)
+
+    return Object.entries(categoryTotals).map(([name, value]) => ({ name, value }))
+  }
+
+  const getBarChartData = () => {
+    const dailyTotals = filteredExpenses.reduce((acc, expense) => {
+      const date = format(new Date(expense.date), "MMM d")
+      acc[date] = (acc[date] || 0) + expense.amount
+      return acc
+    }, {} as Record<string, number>)
+
+    return Object.entries(dailyTotals).map(([date, amount]) => ({
+      date,
+      amount
+    }))
+  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -247,29 +293,89 @@ export default function ExpensesPage() {
         </div>
       </div>
 
+      <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
+        <Input
+          placeholder="Search expenses..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="max-w-sm"
+        />
+        <Select value={category} onValueChange={setCategory}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Category" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Categories</SelectItem>
+            {categories.map((cat) => (
+              <SelectItem key={cat.id} value={cat.name}>
+                {cat.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={timeFilter} onValueChange={setTimeFilter}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Time Period" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="week">This Week</SelectItem>
+            <SelectItem value="month">This Month</SelectItem>
+            <SelectItem value="year">This Year</SelectItem>
+          </SelectContent>
+        </Select>
+        <div className="flex gap-2">
+          <Button
+            variant={viewMode === "category" ? "default" : "outline"}
+            size="icon"
+            onClick={() => setViewMode("category")}
+          >
+            <PieChartIcon className="h-4 w-4" />
+          </Button>
+          <Button
+            variant={viewMode === "timeline" ? "default" : "outline"}
+            size="icon"
+            onClick={() => setViewMode("timeline")}
+          >
+            <BarChartIcon className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
       <Card>
         <CardHeader>
-          <CardTitle>Expenses by Category</CardTitle>
+          <CardTitle>
+            {viewMode === "category" ? "Expenses by Category" : "Expenses Timeline"}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={pieData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={80}
-                  paddingAngle={5}
-                  dataKey="value"
-                >
-                  {pieData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Legend />
-              </PieChart>
+              {viewMode === "category" ? (
+                <PieChart>
+                  <Pie
+                    data={getCategoryData()}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={80}
+                    paddingAngle={5}
+                    dataKey="value"
+                  >
+                    {getCategoryData().map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Legend />
+                  <Tooltip formatter={(value) => `$${value.toFixed(2)}`} />
+                </PieChart>
+              ) : (
+                <BarChart data={getBarChartData()}>
+                  <XAxis dataKey="date" />
+                  <YAxis tickFormatter={(value) => `$${value}`} />
+                  <Tooltip formatter={(value) => `$${value.toFixed(2)}`} />
+                  <Bar dataKey="amount" fill={COLORS[0]} />
+                </BarChart>
+              )}
             </ResponsiveContainer>
           </div>
         </CardContent>
@@ -280,28 +386,6 @@ export default function ExpensesPage() {
           <CardTitle>Expense Details</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex gap-4 mb-6">
-            <Input
-              placeholder="Search expenses..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="max-w-sm"
-            />
-            <Select value={category} onValueChange={setCategory}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Category" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Categories</SelectItem>
-                {categories.map((cat) => (
-                  <SelectItem key={cat.id} value={cat.name}>
-                    {cat.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
           <div className="space-y-4">
             {filteredExpenses.map((expense) => (
               <div
@@ -314,7 +398,7 @@ export default function ExpensesPage() {
                     {format(new Date(expense.date), "MMM d, yyyy 'at' h:mm a")} • {expense.category}
                   </div>
                 </div>
-                <div className="font-medium">${expense.amount}</div>
+                <div className="font-medium">${expense.amount.toFixed(2)}</div>
               </div>
             ))}
           </div>

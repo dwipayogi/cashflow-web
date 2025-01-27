@@ -25,7 +25,7 @@ export default function SettingsPage() {
             <div className="space-y-0.5">
               <Label>Budget Alerts</Label>
               <div className="text-sm text-muted-foreground">
-                Get notified when you&apos;re close to budget limits
+                Get notified when you're close to budget limits
               </div>
             </div>
             <Switch defaultChecked />

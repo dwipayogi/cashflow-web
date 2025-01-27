@@ -58,7 +58,7 @@ export default function LoginPage() {
             <Button type="submit" className="w-full">Sign In</Button>
           </form>
           <div className="mt-4 text-center text-sm">
-            Don&apos;t have an account?{" "}
+            Don't have an account?{" "}
             <Link href="/auth/register" className="text-primary hover:underline">
               Sign up
             </Link>
